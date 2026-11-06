@@ -1,0 +1,195 @@
+# 通用分流基线，依据 2026-11-06 保存的扩展覆写整理。
+# 生成目标电脑配置时核对进程名、出口组及扩展执行顺序。
+# 私有 MQTT、个人 SSH 地址、面板域名及机场专属域名按目标环境添加。
+# 国内名单 DNS 查询直连；连接路径由按顺序匹配的 rules 决定。
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+
+  # 国内名单域名使用国内 DNS。
+  # 是否直连由下方 rules 决定，DNS 设置本身不决定连接路线。
+  nameserver-policy:
+    'rule-set:domestic-direct':
+      - '223.5.5.5#DIRECT'
+      - '119.29.29.29#DIRECT'
+    'rule-set:domestic-auto':
+      - '223.5.5.5#DIRECT'
+      - '119.29.29.29#DIRECT'
+
+  fake-ip-filter:
+    - 'ntp.aliyun.com'
+    - 'pool.ntp.org'
+    - 'time.nist.gov'
+    - "*.lan"
+    - "*.local"
+    - "localhost.ptlogin2.qq.com"
+    - "time.*.com"
+    - "*.msftconnecttest.com"
+    - "*.msftncsi.com"
+
+  # 其余域名使用加密 DNS，DNS 连接遵循分流规则。
+  nameserver:
+    - https://1.1.1.1/dns-query
+    - https://dns.google/dns-query
+
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+
+  respect-rules: true
+
+  proxy-server-nameserver:
+    - '223.5.5.5#DIRECT'
+    - '119.29.29.29#DIRECT'
+
+proxy-groups:
+  - name: AI服务
+    type: select
+    include-all-proxies: true
+
+rules:
+  - AND,((NETWORK,UDP),(DST-PORT,2480),(GEOIP,CN)),DIRECT
+  - DOMAIN-SUFFIX,cnki.net,DIRECT
+  - DOMAIN,ntp.aliyun.com,DIRECT
+  - DOMAIN,pool.ntp.org,DIRECT
+  - DOMAIN,time.nist.gov,DIRECT
+  - DOMAIN,advanced.fenqubiao.com,DIRECT
+  # 指定程序直连，包括能够识别进程的纯 IP 连接。
+  - PROCESS-NAME,ToDesk.exe,DIRECT
+  - PROCESS-NAME,Weixin.exe,DIRECT
+  - PROCESS-NAME,douyin.exe,DIRECT
+  - PROCESS-NAME,douyin_tray.exe,DIRECT
+  - PROCESS-NAME,douyin_guard.exe,DIRECT
+  - PROCESS-NAME,YoudaoDictHelper.exe,DIRECT
+  - PROCESS-NAME,QQLiveService.exe,DIRECT
+  - PROCESS-NAME,wpscloudsvr.exe,DIRECT
+  - PROCESS-NAME,QQMusic.exe,DIRECT
+  - PROCESS-NAME,LeagueClient.exe,DIRECT
+  - PROCESS-NAME,LeagueClientUx.exe,DIRECT
+  - PROCESS-NAME,League of Legends.exe,DIRECT
+  - PROCESS-NAME,LeagueClientUxRender.exe,DIRECT
+  - PROCESS-NAME,wegame.exe,DIRECT
+  - PROCESS-NAME,TinyDL64.exe,DIRECT
+  - PROCESS-NAME,WXWork.exe,DIRECT
+  # UU 远程。
+  - PROCESS-NAME,GameViewer.exe,DIRECT
+  - PROCESS-NAME,GameViewerService.exe,DIRECT
+  - PROCESS-NAME,GameViewerServer.exe,DIRECT
+  - PROCESS-NAME,X6Game-Win64-Shipping.exe,DIRECT
+
+  # AI 服务及 IP 检测网站。
+  - DOMAIN,invite.linuxdo.org,DIRECT
+  - DOMAIN-SUFFIX,anthropic.com,AI服务
+  - DOMAIN-SUFFIX,claude.ai,AI服务
+  - DOMAIN-SUFFIX,claude.com,AI服务
+  - DOMAIN-SUFFIX,openai.com,AI服务
+  - DOMAIN-SUFFIX,chatgpt.com,AI服务
+  - DOMAIN-SUFFIX,3322.net,AI服务
+  - DOMAIN-SUFFIX,ip.sb,AI服务
+  - DOMAIN-SUFFIX,ipify.org,AI服务
+  - DOMAIN-SUFFIX,ipinfo.io,AI服务
+  - DOMAIN-SUFFIX,icanhazip.com,AI服务
+  - DOMAIN-SUFFIX,ifconfig.me,AI服务
+  - DOMAIN-SUFFIX,browserleaks.com,AI服务
+  - DOMAIN-SUFFIX,ident.me,AI服务
+  - DOMAIN-SUFFIX,ip-api.com,AI服务
+  - DOMAIN-SUFFIX,whatismyipaddress.com,AI服务
+
+  # 本机、内网及共享地址段直连。
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
+
+  # 域名命中国内名单，且目标 IP 属于中国时直连。
+  - AND,((RULE-SET,domestic-direct),(GEOIP,CN)),DIRECT
+  - AND,((RULE-SET,domestic-auto),(GEOIP,CN)),DIRECT
+
+  # 其余连接使用 AI服务 当前选择的节点。
+  # 本配置不提供 Clash 核心退出后的断网保护。
+  # 国内 UDP 流量直连，覆盖远程连接的动态 IP 和端口
+  - AND,((NETWORK,UDP),(GEOIP,CN)),DIRECT
+  - DOMAIN,feixupay.com,DIRECT
+  - MATCH,AI服务
+
+rule-providers:
+  domestic-auto:
+    type: http
+    behavior: domain
+    format: yaml
+    url: "https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/direct.txt"
+    path: ./ruleset/domestic-auto.yaml
+    interval: 86400
+    proxy: AI服务
+
+  domestic-direct:
+    type: inline
+    behavior: domain
+    payload:
+      - '+.baidu.com'
+      - '+.qq.com'
+      - '+.taobao.com'
+      - '+.tmall.com'
+      - '+.jd.com'
+      - '+.weibo.com'
+      - '+.bilibili.com'
+      - '+.hdslb.com'
+      - '+.bilivideo.com'
+      - '+.biliapi.com'
+      - '+.biliapi.net'
+      - '+.acgvideo.com'
+      - '+.alipay.com'
+      - '+.taobaocdn.com'
+      - '+.163.com'
+      - '+.126.com'
+      - '+.126.net'
+      - '+.127.net'
+      - '+.netease.com'
+      - '+.gtimg.com'
+      - '+.tencent.com'
+      - '+.tenpay.com'
+      - '+.zhihu.com'
+      - '+.zhimg.com'
+      - '+.douban.com'
+      - '+.doubanio.com'
+      - '+.sina.com'
+      - '+.weibocdn.com'
+      - '+.sohu.com'
+      - '+.iqiyi.com'
+      - '+.qiyipic.com'
+      - '+.youku.com'
+      - '+.tudou.com'
+      - '+.xunlei.com'
+      - '+.kuaishou.com'
+      - '+.douyin.com'
+      - '+.douyincdn.com'
+      - '+.ixigua.com'
+      - '+.toutiao.com'
+      - '+.meituan.com'
+      - '+.meituan.net'
+      - '+.dianping.com'
+      - '+.ctrip.com'
+      - '+.qunar.com'
+      - '+.csdn.net'
+      - '+.cnblogs.com'
+      - '+.gitee.com'
+      - '+.oschina.net'
+      - '+.jianshu.com'
+      - '+.juejin.im'
+      - '+.cnki.net'
+      - '+.lceda.cn'
+      - '+.jlc.com'
+      - '+.szlcsc.com'
+      - '+.oshwhub.com'
+      - '+.huifu.com'
+      - '+.xunhupay.com'
+      - '+.z-pay.cn'
+      - '+.moreurl.cn.cn'
+      - '+.catfk.com'
+      - 'pc-plugin-personal.wpscdn.cn'
+      - 'wxkb-audio-1258344707.cos.ap-shanghai.myqcloud.com'
+      - 'g.alicdn.com'
+      - 'o.alicdn.com'
